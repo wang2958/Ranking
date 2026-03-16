@@ -122,12 +122,7 @@ namespace Ranking.Services
             {
                 var node = _leaderboardSnapshot[i];
 
-                result.Add(new GetLeaderboardResponse
-                {
-                    CustomerId = node.CustomerId,
-                    Score = node.Score,
-                    Rank = rank++
-                });
+                result.Add(new GetLeaderboardResponse { CustomerId = node.CustomerId, Score = node.Score, Rank = rank++ });
             }
             return result;
         }

@@ -7,15 +7,15 @@ namespace Ranking.Controllers
     [Route("")]
     public class RankingController : ControllerBase
     {
-        private RankingService _service;
+        private IRankingService _service;
 
-        public RankingController(RankingService service)
+        public RankingController(IRankingService service)
         {
             _service = service;
         }
 
         [HttpPost("init/{size}")]
-        public IActionResult InitData(int size = 100 * 10000)
+        public IActionResult InitData(int size = 50 * 10000)
         {
             var random = new Random();
             var initList = Enumerable.Range(0, size).Select(x => random.Next(1, 1000)).ToArray();

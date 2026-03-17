@@ -93,9 +93,11 @@ namespace Ranking.Services
 
             var rank = (ulong)start;
 
-            for (int i = start - 1; i < end && i < _leaderboardSnapshot.Count; i++)
+            var snapshot = _leaderboardSnapshot;
+
+            for (int i = start - 1; i < end && i < snapshot.Count; i++)
             {
-                var node = _leaderboardSnapshot[i];
+                var node = snapshot[i];
 
                 result.Add(new GetLeaderboardResponse
                 {
@@ -122,16 +124,18 @@ namespace Ranking.Services
             int index = customer.Rank - 1;
             if (index < 0) return new List<GetLeaderboardResponse>();
 
+            var snapshot = _leaderboardSnapshot;
+
             int start = Math.Max(0, index - high);
-            int end = Math.Min(_leaderboardSnapshot.Count - 1, index + low);
+            int end = Math.Min(snapshot.Count - 1, index + low);
 
             var result = new List<GetLeaderboardResponse>();
             for (int i = start; i <= end; i++)
             {
                 result.Add(new GetLeaderboardResponse
                 {
-                    CustomerId = _leaderboardSnapshot[i].CustomerId,
-                    Score = _leaderboardSnapshot[i].Score,
+                    CustomerId = snapshot[i].CustomerId,
+                    Score = snapshot[i].Score,
                     Rank = (ulong)(i + 1)
                 });
             }

@@ -67,15 +67,18 @@ namespace Ranking.Services
         /// <returns></returns>
         public decimal UpdateScore(ulong customerId, decimal score)
         {
-            var customer = _customers.GetOrAdd(customerId, id => new CustomerNode(id, 0));
-
-            customer.Score += score;
-
-            if (customer.Score > 0)
+            lock (_customers)
             {
-                _isNeedRefreshLeaderboard = true;
+                var customer = _customers.GetOrAdd(customerId, id => new CustomerNode(id, 0));
+
+                customer.Score += score;
+
+                if (customer.Score > 0)
+                {
+                    _isNeedRefreshLeaderboard = true;
+                }
+                return customer.Score;
             }
-            return customer.Score;
         }
 
         /// <summary>
@@ -105,7 +108,7 @@ namespace Ranking.Services
         }
 
         /// <summary>
-        /// O(low+high)
+        /// O(K)
         /// </summary>
         /// <param name="customerId"></param>
         /// <param name="high"></param>

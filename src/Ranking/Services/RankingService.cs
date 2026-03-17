@@ -6,24 +6,24 @@ using System.Diagnostics;
 namespace Ranking.Services
 {
     /// <summary>
-    /// Dictionary<long, CustomerNode> + SortedSet<CustomerNode> 
+    ///  ConcurrentDictionary<CustomerNode> + Snapshot
     /// </summary>
     public class RankingService : IRankingService
     {
-        // private readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
+        private volatile bool _isNeedRefreshLeaderboard;
+        private volatile List<CustomerNode> _leaderboardSnapshot = new List<CustomerNode>();
+
         private readonly ConcurrentDictionary<ulong, CustomerNode> _customers = new ConcurrentDictionary<ulong, CustomerNode>();
-        // private readonly SortedSet<CustomerNode> _leaderboardSortedSet = new SortedSet<CustomerNode>(new LeaderboardComparer());
 
         public RankingService()
         {
-            _ = Task.Factory.StartNew(
-                    () => RefreshLeaderboard(),
-                    TaskCreationOptions.LongRunning
-                );
+            _ = Task.Factory.StartNew(() => RefreshLeaderboard(), TaskCreationOptions.LongRunning);
         }
 
-        private List<CustomerNode> _leaderboardSnapshot = new List<CustomerNode>();
-        private bool _isNeedRefreshLeaderboard;
+        /// <summary>
+        /// O(N logN)
+        /// </summary>
+        /// <returns></returns>
         async Task RefreshLeaderboard()
         {
             while (true)
@@ -42,14 +42,13 @@ namespace Ranking.Services
                         var initRank = 1;
                         foreach (var leaderboard in newLeaderboardList)
                         {
-                            leaderboard.Rank = initRank;
-                            initRank++;
+                            leaderboard.Rank = initRank++;
                         }
 
                         _isNeedRefreshLeaderboard = false;
 
                         st.Stop();
-                        Console.WriteLine($"{DateTime.Now}: Refresh Leaderboard {st.ElapsedMilliseconds}ms. ");
+                        Console.WriteLine($"{DateTime.Now}: Refresh Leaderboard {st.ElapsedMilliseconds}ms.");
                     }
                     finally
                     {
@@ -61,48 +60,24 @@ namespace Ranking.Services
         }
 
         /// <summary>
-        /// O(logN)
+        /// O(1)
         /// </summary>
         /// <param name="customerId"></param>
         /// <param name="score"></param>
         /// <returns></returns>
         public decimal UpdateScore(ulong customerId, decimal score)
         {
-            // _lock.EnterWriteLock();
-            try
+            lock (_customers)
             {
-                if (!_customers.TryGetValue(customerId, out var customer))
-                {
-                    customer = new CustomerNode(customerId, score);
+                var customer = _customers.GetOrAdd(customerId, id => new CustomerNode(id, 0));
 
-                    _customers[customerId] = customer;
-
-                    if (customer.Score > 0)
-                    {
-                        // _leaderboardSortedSet.Add(customer);
-                        _isNeedRefreshLeaderboard = true;
-                    }
-
-                    return customer.Score;
-                }
-
-                if (customer.Score > 0)
-                {
-                    // _leaderboardSortedSet.Remove(customer);
-                    _isNeedRefreshLeaderboard = true;
-                }
                 customer.Score += score;
+
                 if (customer.Score > 0)
                 {
-                    // _leaderboardSortedSet.Add(customer);
                     _isNeedRefreshLeaderboard = true;
                 }
-
                 return customer.Score;
-            }
-            finally
-            {
-                // _lock.ExitWriteLock();
             }
         }
 
@@ -118,17 +93,24 @@ namespace Ranking.Services
 
             var rank = (ulong)start;
 
-            for (int i = start - 1; i < end && i < _leaderboardSnapshot.Count; i++)
-            {
-                var node = _leaderboardSnapshot[i];
+            var snapshot = _leaderboardSnapshot;
 
-                result.Add(new GetLeaderboardResponse { CustomerId = node.CustomerId, Score = node.Score, Rank = rank++ });
+            for (int i = start - 1; i < end && i < snapshot.Count; i++)
+            {
+                var node = snapshot[i];
+
+                result.Add(new GetLeaderboardResponse
+                {
+                    CustomerId = node.CustomerId,
+                    Score = node.Score,
+                    Rank = rank++
+                });
             }
             return result;
         }
 
         /// <summary>
-        /// O(low+high)
+        /// O(K)
         /// </summary>
         /// <param name="customerId"></param>
         /// <param name="high"></param>
@@ -140,16 +122,22 @@ namespace Ranking.Services
                 return new List<GetLeaderboardResponse>();
 
             int index = customer.Rank - 1;
-
             if (index < 0) return new List<GetLeaderboardResponse>();
 
+            var snapshot = _leaderboardSnapshot;
+
             int start = Math.Max(0, index - high);
-            int end = Math.Min(_leaderboardSnapshot.Count - 1, index + low);
+            int end = Math.Min(snapshot.Count - 1, index + low);
 
             var result = new List<GetLeaderboardResponse>();
             for (int i = start; i <= end; i++)
             {
-                result.Add(new GetLeaderboardResponse { CustomerId = _leaderboardSnapshot[i].CustomerId, Score = _leaderboardSnapshot[i].Score, Rank = (ulong)(i + 1) });
+                result.Add(new GetLeaderboardResponse
+                {
+                    CustomerId = snapshot[i].CustomerId,
+                    Score = snapshot[i].Score,
+                    Rank = (ulong)(i + 1)
+                });
             }
 
             return result;

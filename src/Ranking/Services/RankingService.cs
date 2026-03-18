@@ -13,7 +13,7 @@ namespace Ranking.Services
         private volatile bool _isNeedRefreshLeaderboard;
         private volatile List<CustomerNode> _leaderboardSnapshot = new List<CustomerNode>();
 
-        private readonly ConcurrentDictionary<ulong, CustomerNode> _customers = new ConcurrentDictionary<ulong, CustomerNode>();
+        private readonly ConcurrentDictionary<ulong, CustomerNode> _customers = new ConcurrentDictionary<ulong, CustomerNode>(concurrencyLevel: -1, capacity: 50 * 10000);
 
         public RankingService()
         {

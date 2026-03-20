@@ -91,7 +91,7 @@ namespace Ranking.Services
         {
             var result = new List<GetLeaderboardResponse>(end - start + 1);
 
-            var rank = (ulong)start;
+            var rank = start;
 
             var snapshot = _leaderboardSnapshot;
 
@@ -136,7 +136,7 @@ namespace Ranking.Services
                 {
                     CustomerId = snapshot[i].CustomerId,
                     Score = snapshot[i].Score,
-                    Rank = (ulong)(i + 1)
+                    Rank = (i + 1)
                 });
             }
 

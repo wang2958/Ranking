@@ -1,59 +1,54 @@
 # Ranking
 
-一个 高性能排行榜服务实现（.NET）
+一个高性能排行榜服务实现（.NET）
 
-该项目通过 ConcurrentDictionary + Snapshot（快照）架构 实现：
+该项目通过 Skip List（跳表）+ ReaderWriterLockSlim 架构实现：
 
-- 写入 O(1)
-- 查询 O(K)
-- 排行榜更新 O(N logN)
+- 强一致性：更新操作完成后，排名立即生效。
+- 高性能查询：利用跳表的索引和跨度（Span）属性，在 $O(\log N)$ 时间内完成排名计算。
+- 高吞吐量：通过读写锁（ReaderWriterLockSlim）实现多线程并发读取，优化读多写少的排行榜场景。
 
-通过后台线程异步刷新排行榜，将高成本排序操作从用户请求路径中剥离，从而获得极高的查询吞吐量。
+
 
 # 架构设计
 
 整体架构如下：
 
-    +--------------------+
-                |   Update Score     |
-                |   O(1)             |
-                +---------+----------+
-                          |
-                          v
-               ConcurrentDictionary
-                     (全量数据)
-                          |
-                          | 触发刷新
-                          v
-                 Refresh Thread
-               (后台排行榜刷新)
-                    O(N logN)
-                          |
-                          v
-                  Snapshot List
-                 (排行榜快照)
-                          |
-                          |
-            +-------------+-------------+
-            |                           |
-            v                           v
-     GetLeaderboard()            GetCustomerLeaderboard()
-           O(K)                         O(K)
+      +--------------------------+
+      |   API Request (Update)   |
+      +-----------+--------------+
+                  |
+                  v
+      ReaderWriterLock (Write)
+                  |
+      +-----------+--------------+
+      |    Dictionary<ID, Score> | 
+      |    Skip List (With Span) | 
+      +-----------+--------------+
+                  |
+                  v
+      +-----------+--------------+
+      |   API Request (Query)    |
+      +-----------+--------------+
+                  |
+                  v
+      ReaderWriterLock (Read)
+                  |
+      Skip List Traversal (O(log N + K))
 
 核心思想：
 
-- 写入更新只修改 ConcurrentDictionary
-- 排行榜查询只访问 Snapshot 快照
-- 后台线程负责周期性排序生成快照
+- 跳表跨度（Span）：每个节点记录了跳跃步长，时间复杂度降至 $O(\log N)$。
+- 读写分离锁：允许同时处理多个查询请求，只有在更新分数时才会阻塞读取。
+- 使用 Dictionary 存储用户分数的实时快照，避免在跳表中进行全表扫描找用户。
 
 # 核心复杂度
 
 | 操作                   | 时间复杂度           | 说明               |
 | ---------------------- | -------------------- | ------------------ |
-| UpdateScore            | **O(1)**       | 更新用户分数       |
-| GetLeaderboard         | **O(K)**       | 获取区间排行榜     |
-| GetCustomerLeaderboard | **O(K)**       | 获取用户附近排行榜 |
-| RefreshLeaderboard     | **O(N log N)** | 后台刷新排行榜     |
+| UpdateScore            | **O(log N)**       | 更新用户分数       |
+| GetLeaderboard         | **O(log N)**       | 获取区间排行榜     |
+| GetCustomerLeaderboard | **O(log N + K)**       | 获取用户附近排行榜 |
 
 # JMeter 压测
 
@@ -70,8 +65,6 @@ Threads: 200
 LoopCount: 5000
 初始客户数据50w, 初始排行榜数据50w
 ```
-
-排行榜刷新延迟 ≈ 500 ms
 
 单接口测试结果
 ![](img/single_update_customer_score.png)

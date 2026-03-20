@@ -2,54 +2,47 @@
 
 A high-performance leaderboard service implemented in .NET.
 
-This project uses a ConcurrentDictionary + Snapshot architecture to achieve:
-- O(1) write performance
-- O(K) query performance
-- O(N log N) leaderboard refresh
-
-By using a background thread for asynchronous leaderboard refresh, expensive sorting operations are removed from the user request path, enabling extremely high query throughput.
+This project leverages a Skip List with Span combined with a ReaderWriterLockSlim architecture to provide:
+- Strong Consistency: Ranking updates are reflected immediately upon completion of the operation.
+- High-Performance Queries: Utilizes Skip List indexing and Span properties to calculate rankings in $O(\log N)$ time.
+- High Throughput: Implements a ReaderWriterLockSlim to support concurrent reads, optimizing for typical read-heavy leaderboard workloads.
 
 # Architecture
 The overall architecture is as follows:
 
-            +--------------------+
-            |   Update Score     |
-            |       O(1)         |
-            +---------+----------+
-                    |
-                    v
-            ConcurrentDictionary
-                (All user data)
-                    |
-                    | Trigger refresh
-                    v
-            Refresh Thread
-            (Background leaderboard refresh)
-                O(N logN)
-                    |
-                    v
-            Snapshot List
-            (Leaderboard snapshot)
-                    |
-                    |
-            +---------+---------+
-            |                   |
-            v                   v
-        GetLeaderboard()   GetCustomerLeaderboard()
-            O(K)               O(K)
+      +--------------------------+
+      |   API Request (Update)   |
+      +-----------+--------------+
+                  |
+                  v
+      ReaderWriterLock (Write)
+                  |
+      +-----------+--------------+
+      |    Dictionary<ID, Score> | 
+      |    Skip List (With Span) | 
+      +-----------+--------------+
+                  |
+                  v
+      +-----------+--------------+
+      |   API Request (Query)    |
+      +-----------+--------------+
+                  |
+                  v
+      ReaderWriterLock (Read)
+                  |
+      Skip List Traversal (O(log N + K))
 
 Key ideas:
-- Write operations only modify the ConcurrentDictionary
-- Leaderboard queries only access the Snapshot list
-- The background thread periodically sorts and generates snapshots
+- Skip List Span: Each node stores the "distance" (span) to the next node at every level. This allows the system to calculate an element's absolute rank in $O(\log N)$ time by summing the spans during traversal.
+- Read/Write Locking: A pessimistic locking strategy that allows multiple simultaneous readers but ensures exclusive access for writers during the atomic update cycle.
+- Score Map: Uses a Dictionary<ulong, decimal> to store current scores, enabling $O(1)$ lookup to find the specific score required to locate and remove a node from the Skip List.
 
 # Time Complexity
 | Operation              | Time Complexity | Description                    |
 | ---------------------- | --------------- | ------------------------------ |
-| UpdateScore            | **O(1)**        | Update a user's score          |
-| GetLeaderboard         | **O(K)**        | Get leaderboard range          |
-| GetCustomerLeaderboard | **O(K)**        | Get a user's nearby ranking    |
-| RefreshLeaderboard     | **O(N log N)**  | Background leaderboard refresh |
+| UpdateScore            | **O(log N)**        | Update a user's score          |
+| GetLeaderboard         | **O(log N)**        | Get leaderboard range          |
+| GetCustomerLeaderboard | **O(log N + K)**        | Get a user's nearby ranking    | 
 
 # JMeter Benchmark
 Test environment:
@@ -60,7 +53,6 @@ Memory: 64GB
 OS: Linux
 Initial data: 500k customers, 500k leaderboard entries
 ```
-Leaderboard refresh latency: ~500 ms
 
 Single-endpoint test results:
 ![](img/single_update_customer_score.png)

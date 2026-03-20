@@ -1,6 +1,6 @@
 ﻿namespace Ranking.Api.Models.Response
 {
-    public struct GetLeaderboardResponse
+    public class GetLeaderboardResponse
     {
         public ulong CustomerId { get; set; }
         public decimal Score { get; set; }

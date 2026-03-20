@@ -18,7 +18,7 @@ namespace Ranking.Api.Services
 
                 if (_customers.TryGetValue(customerId, out var customerScore))
                 {
-                    if (customerScore > 0) _skipList.Delete(customerId, score);
+                    if (customerScore > 0) _skipList.Delete(customerId, customerScore);
                     customerScore += score;
                     _customers[customerId] = customerScore;
                 }

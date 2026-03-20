@@ -41,7 +41,7 @@ namespace Ranking.Api.Services
 
                 if (customerScore > 0) _skipList.Insert(customerId, customerScore);
 
-                RemoveCache();
+                // RemoveCache();
 
                 return customerScore;
             }
@@ -65,14 +65,16 @@ namespace Ranking.Api.Services
         {
             start = Math.Max(1, start);
 
-            var key = RedisConstant.GetLeaderboardKey(start, end);
-            return _memoryCache.GetOrCreate(key, (entry) =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
-                allCacheKeys.Add(key);
+            return GetLeaderboardWithSkipList(start, end);
 
-                return GetLeaderboardWithSkipList(start, end);
-            }) ?? EmptyListResponse;
+            //var key = RedisConstant.GetLeaderboardKey(start, end);
+            //return _memoryCache.GetOrCreate(key, (entry) =>
+            //{
+            //    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+            //    allCacheKeys.Add(key);
+
+            //    return GetLeaderboardWithSkipList(start, end);
+            //}) ?? EmptyListResponse;
         }
 
         private List<GetLeaderboardResponse> GetLeaderboardWithSkipList(int start, int end)
@@ -101,14 +103,16 @@ namespace Ranking.Api.Services
 
         public List<GetLeaderboardResponse> GetCustomerLeaderboard(ulong customerId, int high, int low)
         {
-            var key = RedisConstant.GetCustomerLeaderboardKey(customerId, high, low);
-            return _memoryCache.GetOrCreate(key, (entry) =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
-                allCacheKeys.Add(key);
+            return GetCustomerLeaderboardWithSkipList(customerId, high, low);
 
-                return GetCustomerLeaderboardWithSkipList(customerId, high, low);
-            }) ?? EmptyListResponse; 
+            //var key = RedisConstant.GetCustomerLeaderboardKey(customerId, high, low);
+            //return _memoryCache.GetOrCreate(key, (entry) =>
+            //{
+            //    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+            //    allCacheKeys.Add(key);
+
+            //    return GetCustomerLeaderboardWithSkipList(customerId, high, low);
+            //}) ?? EmptyListResponse; 
         }
 
         private List<GetLeaderboardResponse> GetCustomerLeaderboardWithSkipList(ulong customerId, int high, int low)
